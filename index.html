@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>송도 1공구 부동산 대시보드 — 33평+ 전월세 비교</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0e1117;
+    --card: #161b22;
+    --card-2: #1c2230;
+    --border: #2a3340;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --jeonse: #3fb950;
+    --wolse: #f78166;
+    --maemae: #a371f7;
+    --warn: #d29922;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", "맑은 고딕", sans-serif;
+    font-size: 14px;
+  }
+  header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  header .meta b { color: var(--text); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 64px);
+  }
+  aside {
+    border-right: 1px solid var(--border);
+    padding: 20px 18px;
+    background: var(--card);
+  }
+  aside h3 { margin: 18px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  aside h3:first-child { margin-top: 0; }
+  .filter-group { display: flex; flex-direction: column; gap: 6px; }
+  .filter-group label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px;
+    cursor: pointer; font-size: 13px;
+  }
+  .filter-group label:hover { background: var(--card-2); }
+  .filter-group input[type="checkbox"] { margin: 0; }
+  .range-row { display: flex; gap: 6px; align-items: center; }
+  .range-row input[type="number"] {
+    width: 70px; padding: 4px 8px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+  }
+  button.btn {
+    padding: 8px 14px; border-radius: 6px;
+    background: var(--accent); color: white; border: none;
+    cursor: pointer; font-weight: 600;
+  }
+  button.btn:hover { filter: brightness(1.1); }
+  button.btn-secondary {
+    background: var(--card-2); color: var(--text); border: 1px solid var(--border);
+  }
+
+  main { padding: 20px 24px; overflow-x: auto; }
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 14px 16px; border-radius: 8px;
+  }
+  .stat .label { color: var(--muted); font-size: 12px; }
+  .stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .stat.jeonse .value { color: var(--jeonse); }
+  .stat.wolse .value { color: var(--wolse); }
+  .stat.maemae .value { color: var(--maemae); }
+
+  .charts {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 14px; margin-bottom: 20px;
+  }
+  @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+  .chart-box {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 14px 16px; border-radius: 8px; min-height: 280px;
+  }
+  .chart-box h4 { margin: 0 0 10px; font-size: 14px; color: var(--text); }
+  .chart-box canvas { max-height: 240px; }
+
+  .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+  .tab {
+    padding: 8px 14px; cursor: pointer; border-radius: 6px;
+    background: var(--card); border: 1px solid var(--border); color: var(--muted);
+    font-weight: 600;
+  }
+  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  table.listings {
+    width: 100%; border-collapse: collapse; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  table.listings th, table.listings td {
+    padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+    font-size: 13px; white-space: nowrap;
+  }
+  table.listings th {
+    background: var(--card-2); color: var(--muted); font-weight: 600;
+    cursor: pointer; user-select: none;
+    position: sticky; top: 0; z-index: 1;
+  }
+  table.listings th:hover { color: var(--accent); }
+  table.listings tr:hover td { background: var(--card-2); }
+  table.listings td.price { font-weight: 600; }
+  table.listings td.price.jeonse { color: var(--jeonse); }
+  table.listings td.price.wolse { color: var(--wolse); }
+  table.listings td.price.maemae { color: var(--maemae); }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600;
+  }
+  .pill.jeonse { background: rgba(63,185,80,.15); color: var(--jeonse); }
+  .pill.wolse { background: rgba(247,129,102,.15); color: var(--wolse); }
+  .pill.maemae { background: rgba(163,113,247,.15); color: var(--maemae); }
+
+  .empty {
+    padding: 60px 20px; text-align: center; color: var(--muted);
+    background: var(--card); border: 1px dashed var(--border); border-radius: 8px;
+  }
+  .warn {
+    padding: 14px 16px; background: rgba(210,153,34,.1);
+    border: 1px solid var(--warn); border-radius: 6px;
+    color: var(--warn); margin-bottom: 20px;
+  }
+  .stale-banner {
+    padding: 10px 16px; background: rgba(210,153,34,.08);
+    border-left: 3px solid var(--warn);
+    color: var(--warn); font-size: 13px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .stale-banner .stale-action {
+    margin-left: auto; white-space: nowrap; font-size: 12px;
+    background: rgba(210,153,34,.2); border: 1px solid var(--warn);
+    color: var(--warn); border-radius: 4px; padding: 3px 10px; cursor: pointer;
+    text-decoration: none;
+  }
+  .stale-banner .stale-action:hover { background: rgba(210,153,34,.35); }
+  .confirm-old { color: var(--warn) !important; }
+  .confirm-very-old { color: #f85149 !important; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .tiny { font-size: 11px; color: var(--muted); }
+
+  /* 데이터 수집 안내 모달 */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.6); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 28px 32px; max-width: 480px; width: 90%;
+    box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  }
+  .modal-box h2 { margin: 0 0 16px; font-size: 16px; }
+  .modal-box .step {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 12px; font-size: 14px; line-height: 1.5;
+  }
+  .modal-box .step-num {
+    min-width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: #000; font-weight: 700;
+    font-size: 12px; display: flex; align-items: center; justify-content: center;
+  }
+  .modal-path {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px 12px; font-family: monospace; font-size: 12px;
+    word-break: break-all; margin: 12px 0; color: var(--muted);
+  }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+  .modal-actions .btn-copy {
+    background: var(--accent); color: #000; border: none; border-radius: 4px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .modal-actions .btn-copy:hover { opacity: .85; }
+  .modal-actions .btn-close {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    border-radius: 4px; padding: 8px 16px; font-size: 13px; cursor: pointer;
+  }
+  .modal-actions .btn-close:hover { color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏙️ 송도 1공구 부동산 대시보드</h1>
+    <div class="meta">전세/월세/매매 매물 · 데이터: 네이버 부동산 · <span id="updatedAt">로딩 중…</span></div>
+  </div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <span id="data-age-badge" style="font-size:12px; color:var(--muted);"></span>
+    <span id="refresh-progress" style="display:none; font-size:12px; color:var(--jeonse);"></span>
+    <a class="btn-secondary btn" id="btn-live-refresh"
+       href="fetchdata://"
+       onclick="onFetchClick()">📥 데이터 수집</a>
+    <button class="btn-secondary btn" onclick="location.reload()">🔄 화면 갱신</button>
+  </div>
+</header>
+<div id="stale-banner" style="display:none"></div>
+
+<!-- 데이터 수집 안내 모달 -->
+<div class="modal-overlay" id="fetch-modal" onclick="if(event.target===this)closeFetchModal()">
+  <div class="modal-box">
+    <h2>📥 데이터 수집 방법</h2>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>아래 경로를 복사하세요</div>
+    </div>
+    <div class="modal-path" id="bat-path">C:\Users\151934\이호준\20260524\송도부동산_대시보드\자동수집.bat</div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>탐색기 주소창에 붙여넣고 <b>Enter</b> — 또는 해당 폴더에서 <b>자동수집.bat</b>을 더블클릭</div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>수집 완료 후 (약 30~40초) 이 창을 닫고 <b>🔄 화면 갱신</b> 클릭</div>
+    </div>
+    <div style="margin-top:16px; padding:10px 14px; background:rgba(88,166,255,.08); border:1px solid rgba(88,166,255,.2); border-radius:6px; font-size:13px; color:var(--muted);">
+      💡 <b>자동 갱신</b>: 아래 버튼으로 40초 타이머를 시작하면 bat 실행 후 자동으로 화면이 갱신됩니다.
+    </div>
+    <div class="modal-actions">
+      <button class="btn-close" onclick="closeFetchModal()">닫기</button>
+      <button class="btn-copy" onclick="copyBatPath()">📋 경로 복사</button>
+      <button class="btn-copy" style="background:var(--warn); margin-left:0;"
+              onclick="scheduleAutoReload();closeFetchModal()">⏱ 40초 후 자동 갱신</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <aside>
+    <h3>거래 유형</h3>
+    <div class="filter-group" id="filter-trade">
+      <label><input type="checkbox" value="B1" checked> 전세</label>
+      <label><input type="checkbox" value="B2" checked> 월세</label>
+      <label><input type="checkbox" value="A1" checked> 매매</label>
+    </div>
+
+    <h3 style="display:flex; align-items:center; gap:8px;">
+      단지
+      <label style="font-weight:normal; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="check-all-complex" checked onchange="toggleAllComplex(this.checked)">
+        전체
+      </label>
+    </h3>
+    <div class="filter-group" id="filter-complex"></div>
+
+    <h3>공급 평형</h3>
+    <div class="range-row">
+      <input type="number" id="pyeongMin" placeholder="최소" value="" min="0" />
+      <span class="tiny">~</span>
+      <input type="number" id="pyeongMax" placeholder="최대" />
+      <span class="tiny">평</span>
+    </div>
+
+    <h3>전세가 (억원)</h3>
+    <div class="range-row">
+      <input type="number" id="jeonseMin" placeholder="최소" min="0" step="0.5" />
+      <span class="tiny">~</span>
+      <input type="number" id="jeonseMax" placeholder="최대" min="0" step="0.5" />
+    </div>
+
+    <h3>월세 (만원)</h3>
+    <div class="range-row">
+      <input type="number" id="wolseMin" placeholder="최소" min="0" step="10" />
+      <span class="tiny">~</span>
+      <input type="number" id="wolseMax" placeholder="최대" min="0" step="10" />
+    </div>
+
+    <h3>정렬</h3>
+    <select id="sortBy" style="width:100%; padding:6px 8px; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px;">
+      <option value="recent">확인일 최신순</option>
+      <option value="priceAsc">가격 낮은순</option>
+      <option value="priceDesc">가격 높은순</option>
+      <option value="pyeongAsc">평형 작은순</option>
+      <option value="pyeongDesc">평형 큰순</option>
+      <option value="complex">단지별</option>
+    </select>
+
+    <h3 style="margin-top: 24px;">참고</h3>
+    <div class="tiny" style="line-height:1.6">
+      · 월세 매물은 보증금 + 월세×200으로 <b>전세환산가</b> 표시 (참고용)<br/>
+      · 평형: 공급면적 ÷ 3.3058<br/>
+      · <b>데이터 갱신</b>: 상단 [📥 데이터 수집] 클릭 → 열리는 창에서 <b>실행</b> 선택<br/>
+      · 확인일 <span style="color:var(--warn)">주황</span>/<span style="color:#f85149">빨강</span>: 14/21일 이상 경과 매물 — 실제 존재 여부 확인 권장
+    </div>
+  </aside>
+
+  <main>
+    <div id="warning"></div>
+
+    <div class="stats">
+      <div class="stat"><div class="label">필터된 매물</div><div class="value" id="stat-filtered">0</div></div>
+      <div class="stat jeonse"><div class="label">전세</div><div class="value" id="stat-jeonse">0</div></div>
+      <div class="stat wolse"><div class="label">월세</div><div class="value" id="stat-wolse">0</div></div>
+      <div class="stat maemae"><div class="label">매매</div><div class="value" id="stat-maemae">0</div></div>
+      <div class="stat"><div class="label">전세 중위가</div><div class="value" id="stat-jeonse-median">-</div></div>
+      <div class="stat"><div class="label">월세 중위가</div><div class="value" id="stat-wolse-median">-</div></div>
+      <div class="stat maemae"><div class="label">매매 중위가</div><div class="value" id="stat-maemae-median">-</div></div>
+    </div>
+
+    <div class="charts">
+      <div class="chart-box">
+        <h4>📊 단지별 매물 수 (전세 vs 월세)</h4>
+        <canvas id="chartComplex"></canvas>
+      </div>
+      <div class="chart-box">
+        <h4>📈 평형대별 평균 전세가 / 월세 보증금 (억)</h4>
+        <canvas id="chartPyeong"></canvas>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="all" onclick="setTab('all')">전체 매물</div>
+      <div class="tab" data-tab="compare" onclick="setTab('compare')">단지별 비교</div>
+    </div>
+
+    <div id="view-all"></div>
+    <div id="view-compare" style="display:none"></div>
+  </main>
+
+</div>
+
+<script>
+// ===== 데이터 로드 =====
+async function loadData() {
+  // 1) HTTP 서버 모드 (fetch 가능)
+  try {
+    const r = await fetch('data.json?t=' + new Date().getTime());
+    if (r.ok) return await r.json();
+  } catch (_) { /* file:// — 폴백 */ }
+  // 2) file:// 폴백 — script src로 data.js 로드
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'data.js?t=' + new Date().getTime();
+    s.onload = () => {
+      if (window.__DATA__) res(window.__DATA__);
+      else rej(new Error('data.js에 __DATA__가 없음'));
+    };
+    s.onerror = () => rej(new Error('data.js 로드 실패 — 새로고침.bat을 먼저 실행하세요'));
+    document.head.appendChild(s);
+  });
+}
+
+let RAW = null;          // 전체 데이터
+let FILTERED = [];       // 현재 필터 결과
+
+function formatEok(man) {
+  if (!man) return '0';
+  const eok = Math.floor(man / 10000);
+  const rest = man % 10000;
+  if (eok && rest) return `${eok}억 ${rest.toLocaleString()}`;
+  if (eok) return `${eok}억`;
+  return `${rest.toLocaleString()}`;
+}
+function median(arr) {
+  if (!arr.length) return 0;
+  const s = arr.slice().sort((a,b)=>a-b);
+  const m = Math.floor(s.length/2);
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+}
+
+function toggleAllComplex(checked) {
+  document.querySelectorAll('#filter-complex input[type=checkbox]').forEach(cb => cb.checked = checked);
+  applyFilters();
+}
+
+// ===== 데이터 신선도 =====
+function showDataAge(updatedAt) {
+  const fetched = new Date(updatedAt.replace(' ', 'T'));
+  const now = new Date();
+  const diffMs = now - fetched;
+  const diffH = diffMs / 3600000;
+  const diffMin = Math.round(diffMs / 60000);
+
+  let ageText, ageColor;
+  if (diffH < 1) {
+    ageText = `${diffMin}분 전 수집`;
+    ageColor = 'var(--jeonse)';
+  } else if (diffH < 8) {
+    ageText = `${Math.floor(diffH)}시간 전 수집`;
+    ageColor = 'var(--text)';
+  } else if (diffH < 24) {
+    ageText = `${Math.floor(diffH)}시간 전 수집 ⚠`;
+    ageColor = 'var(--warn)';
+  } else {
+    const days = Math.floor(diffH / 24);
+    ageText = `${days}일 전 수집 ⚠`;
+    ageColor = '#f85149';
+  }
+
+  const badge = document.getElementById('data-age-badge');
+  if (badge) { badge.textContent = ageText; badge.style.color = ageColor; }
+
+  if (diffH >= 8) {
+    const banner = document.getElementById('stale-banner');
+    if (banner) {
+      banner.className = 'stale-banner';
+      banner.style.display = 'flex';
+      banner.innerHTML = `⚠ 데이터가 <b style="margin:0 4px">${Math.round(diffH)}시간</b> 전에 수집되었습니다. 최신 매물 정보가 다를 수 있습니다.
+        <a class="stale-action" href="fetchdata://" onclick="onFetchClick()">📥 데이터 수집 후 갱신</a>`;
+    }
+  }
+}
+
+function showFetchGuide() {
+  document.getElementById('fetch-modal').classList.add('open');
+}
+function closeFetchModal() {
+  document.getElementById('fetch-modal').classList.remove('open');
+}
+function copyBatPath() {
+  const path = document.getElementById('bat-path').textContent;
+  navigator.clipboard.writeText(path).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ 복사됨!';
+    setTimeout(() => btn.textContent = '📋 경로 복사', 2000);
+  });
+}
+function onFetchClick() {
+  const prog = document.getElementById('refresh-progress');
+  prog.style.display = 'inline';
+  prog.textContent = '⬇ 다운로드 바 [열기] 클릭 → 40초 후 자동 갱신';
+  scheduleAutoReload();
+}
+
+function scheduleAutoReload() {
+  let sec = 40;
+  const prog = document.getElementById('refresh-progress');
+  const timer = setInterval(() => {
+    sec--;
+    if (prog) prog.textContent = `⏱ ${sec}초 후 자동 갱신…`;
+    if (sec <= 0) { clearInterval(timer); location.reload(); }
+  }, 1000);
+  const badge = document.getElementById('data-age-badge');
+  if (badge) { badge.textContent = '수집 중… (40초 후 갱신)'; badge.style.color = 'var(--warn)'; }
+}
+
+function confirmAgeClass(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const diffDays = (new Date() - d) / 86400000;
+  if (diffDays > 21) return 'confirm-very-old';
+  if (diffDays > 14) return 'confirm-old';
+  return '';
+}
+
+// ===== 필터 UI 초기화 =====
+function initFilters(data) {
+  const cont = document.getElementById('filter-complex');
+  const names = Array.from(new Set(data.매물.map(a => a.단지))).sort();
+  cont.innerHTML = names.map(n => `
+    <label><input type="checkbox" value="${n}" checked> ${n}</label>
+  `).join('');
+  cont.addEventListener('change', () => {
+    const all = cont.querySelectorAll('input[type=checkbox]');
+    const checked = cont.querySelectorAll('input[type=checkbox]:checked');
+    const master = document.getElementById('check-all-complex');
+    master.indeterminate = checked.length > 0 && checked.length < all.length;
+    master.checked = checked.length === all.length;
+    applyFilters();
+  });
+  document.getElementById('filter-trade').addEventListener('change', applyFilters);
+  ['pyeongMin','pyeongMax','jeonseMin','jeonseMax','wolseMin','wolseMax','sortBy']
+    .forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', applyFilters);
+      el.addEventListener('change', applyFilters);
+    });
+}
+
+function getCheckedValues(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`))
+              .map(el => el.value);
+}
+
+function applyFilters() {
+  if (!RAW) return;
+  const trades = new Set(getCheckedValues('filter-trade'));
+  const complexes = new Set(getCheckedValues('filter-complex'));
+  const pyeongMin = parseFloat(document.getElementById('pyeongMin').value) || 0;
+  const pyeongMax = parseFloat(document.getElementById('pyeongMax').value) || Infinity;
+  const jeonseMin = (parseFloat(document.getElementById('jeonseMin').value) || 0) * 10000;
+  const jeonseMax = (parseFloat(document.getElementById('jeonseMax').value) || Infinity) * 10000;
+  const wolseMin = parseFloat(document.getElementById('wolseMin').value) || 0;
+  const wolseMax = parseFloat(document.getElementById('wolseMax').value) || Infinity;
+
+  FILTERED = RAW.매물.filter(a => {
+    if (!trades.has(a.거래코드)) return false;
+    if (!complexes.has(a.단지)) return false;
+    if (a.공급평 < pyeongMin || a.공급평 > pyeongMax) return false;
+    if (a.거래코드 === 'B1') {
+      if (a.보증금_만원 < jeonseMin || a.보증금_만원 > jeonseMax) return false;
+    } else if (a.거래코드 === 'B2') {
+      if (a.월세_만원 < wolseMin || a.월세_만원 > wolseMax) return false;
+    }
+    return true;
+  });
+
+  const sortBy = document.getElementById('sortBy').value;
+  FILTERED.sort((a,b) => {
+    if (sortBy === 'priceAsc') return (a.보증금_만원 + a.월세_만원*200) - (b.보증금_만원 + b.월세_만원*200);
+    if (sortBy === 'priceDesc') return (b.보증금_만원 + b.월세_만원*200) - (a.보증금_만원 + a.월세_만원*200);
+    if (sortBy === 'pyeongAsc') return a.공급평 - b.공급평;
+    if (sortBy === 'pyeongDesc') return b.공급평 - a.공급평;
+    if (sortBy === 'complex') return a.단지.localeCompare(b.단지, 'ko');
+    // 최신
+    return (b.확인일 || '').localeCompare(a.확인일 || '');
+  });
+
+  render();
+}
+
+// ===== 렌더링 =====
+function render() {
+  // 통계
+  document.getElementById('stat-filtered').textContent = FILTERED.length.toLocaleString();
+  const jeonse = FILTERED.filter(a => a.거래코드 === 'B1');
+  const wolse = FILTERED.filter(a => a.거래코드 === 'B2');
+  const maemae = FILTERED.filter(a => a.거래코드 === 'A1');
+  document.getElementById('stat-jeonse').textContent = jeonse.length.toLocaleString();
+  document.getElementById('stat-wolse').textContent = wolse.length.toLocaleString();
+  document.getElementById('stat-maemae').textContent = maemae.length.toLocaleString();
+  document.getElementById('stat-jeonse-median').textContent =
+    jeonse.length ? formatEok(median(jeonse.map(a => a.보증금_만원))) : '-';
+  document.getElementById('stat-wolse-median').textContent =
+    wolse.length ? `${median(wolse.map(a => a.월세_만원)).toLocaleString()} / 보 ${formatEok(median(wolse.map(a => a.보증금_만원)))}` : '-';
+  document.getElementById('stat-maemae-median').textContent =
+    maemae.length ? formatEok(median(maemae.map(a => a.보증금_만원))) : '-';
+
+  renderTable();
+  renderCompareView();
+  renderCharts();
+}
+
+function renderTable() {
+  const cont = document.getElementById('view-all');
+  if (!FILTERED.length) {
+    cont.innerHTML = `<div class="empty">조건에 맞는 매물이 없습니다.</div>`;
+    return;
+  }
+  const rows = FILTERED.map(a => {
+    const tradeClass = a.거래코드 === 'B1' ? 'jeonse' : a.거래코드 === 'B2' ? 'wolse' : 'maemae';
+    const priceCell = a.거래코드 === 'B1'
+      ? formatEok(a.보증금_만원)
+      : a.거래코드 === 'B2'
+        ? `보 ${formatEok(a.보증금_만원)} / 월 ${a.월세_만원.toLocaleString()}`
+        : formatEok(a.보증금_만원);
+    const equiv = a.전세환산_만원 ? `<span class="tiny">≈${formatEok(a.전세환산_만원)}</span>` : '';
+    const link = a.링크 ? `<a href="${a.링크}" target="_blank">상세</a>` : '';
+    return `<tr>
+      <td><span class="pill ${tradeClass}">${a.거래}</span></td>
+      <td>${a.단지}</td>
+      <td>${a.공급평}평 <span class="tiny">(${a.전용평})</span></td>
+      <td class="price ${tradeClass}">${priceCell} ${equiv}</td>
+      <td>${a.층}</td>
+      <td>${a.향}</td>
+      <td>${a.동}</td>
+      <td class="${confirmAgeClass(a.확인일)}" title="${confirmAgeClass(a.확인일) ? '확인일이 오래된 매물 — 실제 존재 여부를 링크에서 확인하세요' : ''}">${a.확인일}</td>
+      <td>${link}</td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `
+    <table class="listings">
+      <thead><tr>
+        <th>유형</th><th>단지</th><th>평형</th><th>가격</th>
+        <th>층</th><th>향</th><th>동</th><th>확인일</th><th>링크</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function renderCompareView() {
+  // 단지별로 전세/월세 그룹화 → 비교 카드
+  const byComplex = {};
+  FILTERED.forEach(a => {
+    if (!byComplex[a.단지]) byComplex[a.단지] = { 단지: a.단지, jeonse: [], wolse: [], maemae: [] };
+    if (a.거래코드 === 'B1') byComplex[a.단지].jeonse.push(a);
+    else if (a.거래코드 === 'B2') byComplex[a.단지].wolse.push(a);
+    else if (a.거래코드 === 'A1') byComplex[a.단지].maemae.push(a);
+  });
+  const cont = document.getElementById('view-compare');
+  if (!Object.keys(byComplex).length) {
+    cont.innerHTML = `<div class="empty">조건에 맞는 매물이 없습니다.</div>`;
+    return;
+  }
+  const cards = Object.values(byComplex).sort((a,b)=>a.단지.localeCompare(b.단지,'ko')).map(g => {
+    const jMed = g.jeonse.length ? median(g.jeonse.map(a => a.보증금_만원)) : 0;
+    const wMed = g.wolse.length ? median(g.wolse.map(a => a.월세_만원)) : 0;
+    const wBoMed = g.wolse.length ? median(g.wolse.map(a => a.보증금_만원)) : 0;
+    const mMed = g.maemae.length ? median(g.maemae.map(a => a.보증금_만원)) : 0;
+    return `<div class="chart-box" style="margin-bottom:14px">
+      <h4>${g.단지}</h4>
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+        <div>
+          <div class="tiny">전세 (${g.jeonse.length}건)</div>
+          <div style="font-size:18px; color:var(--jeonse); font-weight:700; margin-top:4px">
+            ${g.jeonse.length ? '중위 ' + formatEok(jMed) : '-'}
+          </div>
+          <div class="tiny" style="margin-top:6px">
+            ${g.jeonse.length ? '최저 ' + formatEok(Math.min(...g.jeonse.map(a=>a.보증금_만원))) + ' · 최고 ' + formatEok(Math.max(...g.jeonse.map(a=>a.보증금_만원))) : ''}
+          </div>
+        </div>
+        <div>
+          <div class="tiny">월세 (${g.wolse.length}건)</div>
+          <div style="font-size:18px; color:var(--wolse); font-weight:700; margin-top:4px">
+            ${g.wolse.length ? '월 ' + wMed.toLocaleString() + ' / 보 ' + formatEok(wBoMed) : '-'}
+          </div>
+          <div class="tiny" style="margin-top:6px">
+            ${g.wolse.length ? '전세환산 중위 ≈ ' + formatEok(wBoMed + wMed*200) : ''}
+          </div>
+        </div>
+        <div>
+          <div class="tiny">매매 (${g.maemae.length}건)</div>
+          <div style="font-size:18px; color:var(--maemae); font-weight:700; margin-top:4px">
+            ${g.maemae.length ? '중위 ' + formatEok(mMed) : '-'}
+          </div>
+          <div class="tiny" style="margin-top:6px">
+            ${g.maemae.length ? '최저 ' + formatEok(Math.min(...g.maemae.map(a=>a.보증금_만원))) + ' · 최고 ' + formatEok(Math.max(...g.maemae.map(a=>a.보증금_만원))) : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  cont.innerHTML = cards;
+}
+
+// ===== 차트 =====
+let chartComplex, chartPyeong;
+function renderCharts() {
+  // 단지별 매물 수 (전세 vs 월세)
+  const byComplex = {};
+  FILTERED.forEach(a => {
+    if (!byComplex[a.단지]) byComplex[a.단지] = { jeonse: 0, wolse: 0, maemae: 0 };
+    if (a.거래코드 === 'B1') byComplex[a.단지].jeonse++;
+    else if (a.거래코드 === 'B2') byComplex[a.단지].wolse++;
+    else if (a.거래코드 === 'A1') byComplex[a.단지].maemae++;
+  });
+  const cNames = Object.keys(byComplex).sort();
+  const cJeonse = cNames.map(n => byComplex[n].jeonse);
+  const cWolse = cNames.map(n => byComplex[n].wolse);
+  const cMaemae = cNames.map(n => byComplex[n].maemae);
+
+  const ctxC = document.getElementById('chartComplex').getContext('2d');
+  if (chartComplex) chartComplex.destroy();
+  chartComplex = new Chart(ctxC, {
+    type: 'bar',
+    data: {
+      labels: cNames,
+      datasets: [
+        { label: '전세', data: cJeonse, backgroundColor: '#3fb950' },
+        { label: '월세', data: cWolse, backgroundColor: '#f78166' },
+        { label: '매매', data: cMaemae, backgroundColor: '#a371f7' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e6edf3' } } },
+      scales: {
+        x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#2a3340' } },
+        y: { ticks: { color: '#8b949e' }, grid: { color: '#2a3340' }, beginAtZero: true }
+      }
+    }
+  });
+
+  // 평형대별 평균 가격
+  const buckets = {};
+  FILTERED.forEach(a => {
+    const b = Math.floor(a.공급평 / 5) * 5;
+    if (!buckets[b]) buckets[b] = { jeonseSum: 0, jeonseN: 0, woSum: 0, woN: 0, mmSum: 0, mmN: 0 };
+    if (a.거래코드 === 'B1') { buckets[b].jeonseSum += a.보증금_만원; buckets[b].jeonseN++; }
+    else if (a.거래코드 === 'B2') { buckets[b].woSum += a.보증금_만원; buckets[b].woN++; }
+    else if (a.거래코드 === 'A1') { buckets[b].mmSum += a.보증금_만원; buckets[b].mmN++; }
+  });
+  const bKeys = Object.keys(buckets).map(Number).sort((a,b)=>a-b);
+  const bLabels = bKeys.map(k => `${k}~${k+5}평`);
+  const bJeonse = bKeys.map(k => buckets[k].jeonseN ? (buckets[k].jeonseSum / buckets[k].jeonseN / 10000) : 0);
+  const bWolse = bKeys.map(k => buckets[k].woN ? (buckets[k].woSum / buckets[k].woN / 10000) : 0);
+  const bMaemae = bKeys.map(k => buckets[k].mmN ? (buckets[k].mmSum / buckets[k].mmN / 10000) : 0);
+
+  const ctxP = document.getElementById('chartPyeong').getContext('2d');
+  if (chartPyeong) chartPyeong.destroy();
+  chartPyeong = new Chart(ctxP, {
+    type: 'bar',
+    data: {
+      labels: bLabels,
+      datasets: [
+        { label: '전세 평균 (억)', data: bJeonse, backgroundColor: '#3fb950' },
+        { label: '월세 보증금 평균 (억)', data: bWolse, backgroundColor: '#f78166' },
+        { label: '매매 평균 (억)', data: bMaemae, backgroundColor: '#a371f7' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e6edf3' } } },
+      scales: {
+        x: { ticks: { color: '#8b949e' }, grid: { color: '#2a3340' } },
+        y: { ticks: { color: '#8b949e' }, grid: { color: '#2a3340' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function setTab(t) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  document.getElementById('view-all').style.display = (t === 'all') ? '' : 'none';
+  document.getElementById('view-compare').style.display = (t === 'compare') ? '' : 'none';
+}
+
+// ===== 직접 수집 (브라우저 → 네이버 API) =====
+const _DIRECTION = {N:'북',S:'남',E:'동',W:'서',NE:'북동',NW:'북서',SE:'남동',SW:'남서',SS:'남남서',NN:'북북동',EN:'북동',ES:'동남',WN:'북서',WS:'서남'};
+const _TRADE = {B1:'전세',B2:'월세',A1:'매매',B3:'단기임대'};
+const _COMPLEXES = [
+  {hscpNo:'104898', _매칭이름:'더샵엑스포10단지'},
+  {hscpNo:'104899', _매칭이름:'더샵엑스포9단지'},
+  {hscpNo:'101241', _매칭이름:'송도더샵7단지그린애비뉴'},
+  {hscpNo:'101242', _매칭이름:'송도더샵8단지그린애비뉴'},
+  {hscpNo:'27146',  _매칭이름:'송도더샵13단지하버뷰'},
+  {hscpNo:'100399', _매칭이름:'송도더샵하버뷰II'},
+  {hscpNo:'104225', _매칭이름:'더샵그린워크1차'},
+  {hscpNo:'104886', _매칭이름:'더샵그린워크2차'},
+  {hscpNo:'106896', _매칭이름:'송도더샵그린워크3차(17블록)'},
+  {hscpNo:'106908', _매칭이름:'송도더샵그린워크3차(18블록)'},
+  {hscpNo:'122682', _매칭이름:'평촌어바인퍼스트', 최소평형:0},
+];
+const _sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function _wonToMan(v) { return v ? Math.floor(Number(v)/10000) : 0; }
+
+function _normalizeItem(raw, complexName) {
+  const info = raw.representativeArticleInfo || raw;
+  const sp = info.spaceInfo || {};
+  const pr = info.priceInfo || {};
+  const dt = info.articleDetail || {};
+  const vf = info.verificationInfo || {};
+  const s1 = parseFloat(sp.supplySpace||0), s2 = parseFloat(sp.exclusiveSpace||0);
+  const p1 = s1 ? Math.round(s1/3.3058*10)/10 : 0;
+  const p2 = s2 ? Math.round(s2/3.3058*10)/10 : 0;
+  const cd = info.tradeType||'';
+  const prc = cd==='A1' ? _wonToMan(pr.dealPrice||pr.warrantyPrice||0) : _wonToMan(pr.warrantyPrice||0);
+  const rent = _wonToMan(pr.rentPrice||0);
+  const no = info.articleNumber||'';
+  return {
+    단지: info.complexName||complexName, 거래: _TRADE[cd]||cd, 거래코드: cd,
+    보증금_만원:prc, 월세_만원:rent, 전세환산_만원:(cd==='B2'&&rent)?prc+rent*200:null,
+    공급m2:s1, 전용m2:s2, 공급평:p1, 전용평:p2,
+    층:dt.floorInfo||'', 향:_DIRECTION[dt.direction||'']||(dt.direction||''),
+    동:info.dongName||'', 확인일:vf.articleConfirmDate||'',
+    기사번호:no, 링크:no?`https://fin.land.naver.com/articles/${no}`:'',
+  };
+}
+
+async function liveRefresh() {
+  const btn = document.getElementById('btn-live-refresh');
+  const prog = document.getElementById('refresh-progress');
+  btn.disabled = true; btn.textContent = '⏳ 수집 중…';
+  prog.style.display = 'inline'; prog.textContent = '세션 연결 중…';
+
+  const allArticles = [];
+  try {
+    // 세션 워밍 (CORS 실패 무시)
+    await fetch('https://fin.land.naver.com/',{mode:'no-cors',credentials:'include'}).catch(()=>{});
+    await _sleep(600);
+
+    for (let i=0; i<_COMPLEXES.length; i++) {
+      const entry = _COMPLEXES[i];
+      const name = entry._매칭이름;
+      const minP = entry.최소평형 != null ? entry.최소평형 : 0;
+      prog.textContent = `(${i+1}/${_COMPLEXES.length}) ${name}…`;
+
+      for (const code of ['B1','B2','A1']) {
+        const maxPg = code==='A1' ? 3 : 5;
+        for (let pg=1; pg<=maxPg; pg++) {
+          let resp;
+          try {
+            resp = await fetch('https://fin.land.naver.com/front-api/v1/complex/article/list',{
+              method:'POST', credentials:'include',
+              headers:{'Content-Type':'application/json',
+                       'Referer':`https://fin.land.naver.com/complexes/${entry.hscpNo}`},
+              body:JSON.stringify({complexNumber:entry.hscpNo,tradeTypes:[code],page:pg,size:30})
+            });
+          } catch(e) { throw Object.assign(new Error('CORS'),{isCors:true}); }
+          if(!resp.ok) break;
+          const d = await resp.json();
+          if(!d.isSuccess||!d.result?.list?.length) break;
+          for(const it of d.result.list){
+            try{
+              const n = _normalizeItem(it, name);
+              if(minP===0||n.공급평>=minP) allArticles.push(n);
+            }catch(_){}
+          }
+          if(!d.result.hasNextPage) break;
+          await _sleep(500);
+        }
+        await _sleep(300);
+      }
+    }
+
+    // 성공 — 데이터 교체
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} `+
+               `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    RAW = {
+      갱신시각:ts, 필터:{최소평형:0}, 매물:allArticles,
+      통계:{총매물:allArticles.length,
+            전세건수:allArticles.filter(a=>a.거래코드==='B1').length,
+            월세건수:allArticles.filter(a=>a.거래코드==='B2').length,
+            매매건수:allArticles.filter(a=>a.거래코드==='A1').length}
+    };
+    document.getElementById('updatedAt').innerHTML =
+      `갱신 <b>${ts}</b> · 총 <b>${RAW.통계.총매물}</b>건 `+
+      `(전세 <b>${RAW.통계.전세건수}</b> / 월세 <b>${RAW.통계.월세건수}</b>)`;
+    showDataAge(ts);
+    document.getElementById('stale-banner').style.display='none';
+    initFilters(RAW);
+    applyFilters();
+    prog.textContent = `✅ ${allArticles.length}건 수집 완료`;
+    setTimeout(()=>{ prog.style.display='none'; }, 4000);
+
+  } catch(e) {
+    prog.style.display='none';
+    if(e.isCors) {
+      // CORS 차단 → 안내 팝업으로 폴백
+      alert('⚠ 브라우저 보안(CORS) 제한으로 직접 수집이 차단되었습니다.\n자동수집.bat 실행 안내를 확인하세요.');
+      showFetchGuide();
+    } else {
+      prog.textContent = '❌ 오류: '+e.message;
+      prog.style.display='inline';
+    }
+  } finally {
+    btn.disabled=false; btn.textContent='📥 데이터 수집';
+  }
+}
+
+// ===== 시작 =====
+loadData().then(data => {
+  RAW = data;
+  document.getElementById('updatedAt').innerHTML =
+    `갱신 <b>${data.갱신시각}</b> · 총 <b>${data.통계.총매물}</b>건 ` +
+    `(전세 <b>${data.통계.전세건수}</b> / 월세 <b>${data.통계.월세건수}</b>)`;
+  showDataAge(data.갱신시각);
+  if (!data.매물.length) {
+    document.getElementById('warning').innerHTML =
+      `<div class="warn">⚠️ 매물 데이터가 비어있습니다. <code>자동수집.bat</code>을 실행했는지, 단지 자동 검색이 성공했는지 (<code>단지목록.json</code>의 hscpNo가 채워졌는지) 확인하세요.</div>`;
+  }
+  initFilters(data);
+  applyFilters();
+}).catch(err => {
+  document.getElementById('warning').innerHTML =
+    `<div class="warn">❌ 데이터 로드 실패: ${err.message}<br/>
+    <b>해결방법</b>: 폴더에서 <code>새로고침.bat</code>을 먼저 실행하세요. (data.json/data.js 생성)</div>`;
+  console.error(err);
+});
+</script>
+</body>
+</html>
