@@ -1,0 +1,39 @@
+name: Daily Real Estate Update
+
+on:
+  schedule:
+    - cron: '0 11 * * *'   # 20:00 KST (UTC+9 = UTC 11:00)
+  workflow_dispatch:        # 수동 실행 버튼
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fetch real estate data
+        run: python fetch.py
+
+      - name: Check alert conditions
+        run: python alert.py
+        env:
+          KAKAO_TOKEN_JSON: ${{ secrets.KAKAO_TOKEN_JSON }}
+
+      - name: Commit and push updated data
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add data.js data.json 단지목록.json
+          git diff --cached --quiet && echo "변경 없음" || (
+            git commit -m "data: auto update $(date +'%Y-%m-%d %H:%M') KST" &&
+            git push
+          )
