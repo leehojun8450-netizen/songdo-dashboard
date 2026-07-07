@@ -3,16 +3,14 @@
 송도 1공구 부동산 알림 체크 — fetch.py 실행 후 자동 호출됩니다.
 
 조건에 맞는 매물이 있으면:
-  1. Windows 토스트 알림 (Windows 로컬 실행 시만)
-  2. 카카오톡 나에게 보내기
-     - 로컬: 카카오_토큰.json 파일 읽기
-     - GitHub Actions: KAKAO_TOKEN_JSON 환경변수 읽기
+  1. 알림결과.json 저장
+  2. Windows 토스트 알림 (즉시, 별도 설정 불필요)
+  3. 카카오톡 나에게 보내기 (카카오_토큰.json 있을 때만)
 """
 
 import json
 import os
 import sys
-import platform
 import subprocess
 from datetime import datetime
 
@@ -27,10 +25,8 @@ DATA_FILE   = os.path.join(BASE_DIR, "data.json")
 RESULT_FILE = os.path.join(BASE_DIR, "알림결과.json")
 TOKEN_FILE  = os.path.join(BASE_DIR, "카카오_토큰.json")
 
-IS_WINDOWS = platform.system() == "Windows"
-
 # ──────────────────────────────────────────────
-# 알림 조건 설정
+# 알림 조건 설정 (여기만 수정하면 됨)
 # ──────────────────────────────────────────────
 MIN_PYEONG         = 33     # 공급 33평 이상
 JEONSE_MAX         = 50000  # 전세 보증금 5억 이하 (단위: 만원)
@@ -67,8 +63,8 @@ def build_kakao_message(result, today_str):
 
 
 def send_windows_toast(title, body):
-    if not IS_WINDOWS:
-        return
+    """PowerShell로 Windows 알림 센터 토스트 발송 (의존성 없음)."""
+    # 인용 문자 이스케이프
     body_esc = body.replace("'", "\\'").replace('"', '\\"').replace("\n", "\\n")
     script = f"""
 Add-Type -AssemblyName System.Windows.Forms
@@ -91,37 +87,20 @@ $balloon.Dispose()
         print(f"  ⚠️  Windows 알림 실패: {e}")
 
 
-def _load_token():
-    """로컬 파일 또는 GitHub Actions 환경변수에서 토큰 로드."""
-    # GitHub Actions: KAKAO_TOKEN_JSON 환경변수 우선
-    env_json = os.environ.get("KAKAO_TOKEN_JSON", "").strip()
-    if env_json:
-        try:
-            return json.loads(env_json)
-        except Exception as e:
-            print(f"  ⚠️  KAKAO_TOKEN_JSON 파싱 실패: {e}")
-            return None
-
-    # 로컬: 파일 읽기
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    return None
-
-
 def send_kakao(message):
+    """카카오_토큰.json 의 refresh_token으로 나에게 보내기."""
     import urllib.request, urllib.parse
 
-    tok = _load_token()
-    if not tok:
-        print("  ℹ️  카카오 토큰 없음 — KakaoTalk 발송 건너뜀")
+    if not os.path.exists(TOKEN_FILE):
         return False
 
-    rest_api_key  = tok.get("rest_api_key", "")
-    refresh_token = tok.get("refresh_token", "")
+    with open(TOKEN_FILE, "r", encoding="utf-8") as f:
+        tok = json.load(f)
+
+    rest_api_key   = tok.get("rest_api_key", "")
+    refresh_token  = tok.get("refresh_token", "")
     if not rest_api_key or not refresh_token:
-        print("  ⚠️  카카오_토큰에 rest_api_key 또는 refresh_token 없음")
+        print("  ⚠️  카카오_토큰.json에 rest_api_key 또는 refresh_token 없음")
         return False
 
     # 1) access_token 갱신
@@ -148,8 +127,8 @@ def send_kakao(message):
         print(f"  ⚠️  access_token 없음: {token_res}")
         return False
 
-    # refresh_token 갱신 시 로컬 파일에만 저장 (Actions에서는 무시)
-    if token_res.get("refresh_token") and IS_WINDOWS and os.path.exists(TOKEN_FILE):
+    # refresh_token이 새로 발급되면 저장 (60일 주기로 재발급)
+    if token_res.get("refresh_token"):
         tok["refresh_token"] = token_res["refresh_token"]
         with open(TOKEN_FILE, "w", encoding="utf-8") as f:
             json.dump(tok, f, ensure_ascii=False, indent=2)
@@ -207,6 +186,7 @@ def check():
         and 0 < a.get("보증금_만원", 0) <= WOLSE_DEPOSIT_MAX
     ]
 
+    # 중복 제거
     seen = set()
     def dedup(lst):
         out = []
@@ -230,12 +210,12 @@ def check():
         "전세_매칭": len(jeonse_hits),
         "월세_매칭": len(wolse_hits),
         "전세_목록": [
-            {"단지": a["단지"], "공급평": a["공급평"], "보증금": a["보증금_표시"],
+            {"단지": a["단지"], "평형": a["공급평"], "보증금": a["보증금_표시"],
              "층": a.get("층",""), "향": a.get("향",""), "링크": a.get("링크","")}
             for a in jeonse_hits[:10]
         ],
         "월세_목록": [
-            {"단지": a["단지"], "공급평": a["공급평"], "보증금": a["보증금_표시"],
+            {"단지": a["단지"], "평형": a["공급평"], "보증금": a["보증금_표시"],
              "월세": a.get("월세_표시",""), "층": a.get("층",""), "링크": a.get("링크","")}
             for a in wolse_hits[:10]
         ],
@@ -251,6 +231,7 @@ def check():
         print("   조건 매칭 없음 — 알림 발송 안 함")
         return
 
+    # 매칭 있으면 알림 발송
     today = datetime.now().strftime("%m/%d")
     msg = build_kakao_message(result, today)
     print("\n[ 발송 메시지 미리보기 ]")

@@ -189,7 +189,7 @@ def format_man(v_man):
     return f"{man:,}"
 
 
-def normalize_article(raw_item, complex_name):
+def normalize_article(raw_item, complex_name, 구역=""):
     info = raw_item.get("representativeArticleInfo") or raw_item
     space = info.get("spaceInfo") or {}
     price = info.get("priceInfo") or {}
@@ -222,6 +222,7 @@ def normalize_article(raw_item, complex_name):
 
     return {
         "단지": info.get("complexName") or complex_name,
+        "구역": 구역,
         "거래": trad_nm,
         "거래코드": trad_cd,
         "보증금_만원": prc_man,
@@ -287,6 +288,7 @@ def main():
             continue
 
         # 단지명 자동 보완
+        구역 = entry.get("구역", "")
         display_name = entry.get("_매칭이름")
         if not display_name:
             print(f"  단지명 조회: {keyword} (hscpNo={hscp_no}) ... ", end="", flush=True)
@@ -322,7 +324,7 @@ def main():
             normed = []
             for it in items:
                 try:
-                    normed.append(normalize_article(it, display_name))
+                    normed.append(normalize_article(it, display_name, 구역))
                 except Exception as e:
                     print(f"\n    [warn] normalize 실패: {e}", file=sys.stderr)
 
@@ -342,7 +344,7 @@ def main():
         cnt_j = sum(1 for a in all_articles if a["단지"] == display_name and a["거래코드"] == "B1")
         cnt_w = sum(1 for a in all_articles if a["단지"] == display_name and a["거래코드"] == "B2")
         complex_summary.append(
-            {"단지": display_name, "hscpNo": hscp_no, "전세건수": cnt_j, "월세건수": cnt_w}
+            {"단지": display_name, "hscpNo": hscp_no, "구역": 구역, "전세건수": cnt_j, "월세건수": cnt_w}
         )
 
     if save_tracking_needed:
