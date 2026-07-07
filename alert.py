@@ -35,11 +35,13 @@ WOLSE_DEPOSIT_MAX  = 150    # 월세 보증금 150만원 이하 (단위: 만원)
 
 
 def _fmt_item_jeonse(a):
-    return f"• {a['단지']} {a['공급평']}평 {a['보증금']} ({a['층']})"
+    pyeong = a.get('평형', a.get('공급평', '?'))
+    return f"• {a['단지']} {pyeong}평 {a['보증금']} ({a['층']})"
 
 def _fmt_item_wolse(a):
+    pyeong = a.get('평형', a.get('공급평', '?'))
     rent = f"/{a['월세']}" if a.get("월세") else ""
-    return f"• {a['단지']} {a['공급평']}평 보{a['보증금']}{rent} ({a['층']})"
+    return f"• {a['단지']} {pyeong}평 보{a['보증금']}{rent} ({a['층']})"
 
 
 def build_kakao_message(result, today_str):
