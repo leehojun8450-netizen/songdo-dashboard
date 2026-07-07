@@ -56,16 +56,32 @@
   }
   .filter-group label:hover { background: var(--card-2); }
   .filter-group input[type="checkbox"] { margin: 0; }
-  .zone-group { margin-bottom: 10px; }
-  .zone-label {
+  .zone-group { margin-bottom: 4px; }
+  .zone-header {
     display: flex; align-items: center; gap: 6px;
-    font-size: 11px; font-weight: 700; color: var(--accent);
-    text-transform: uppercase; letter-spacing: 0.5px;
-    padding: 3px 6px; margin-bottom: 2px; cursor: pointer;
-    border-radius: 4px;
+    padding: 6px 6px; border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--card-2);
+    margin-bottom: 2px;
   }
-  .zone-label:hover { background: rgba(88,166,255,.08); }
-  .zone-complexes { padding-left: 10px; }
+  .zone-header:hover { border-color: var(--accent); background: rgba(88,166,255,.06); }
+  .zone-name {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    flex: 1; cursor: pointer; user-select: none;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .zone-arrow {
+    font-size: 9px; display: inline-block;
+    transition: transform 0.18s; color: var(--muted);
+  }
+  .zone-group.open .zone-arrow { transform: rotate(90deg); }
+  .zone-count { font-size: 10px; color: var(--muted); font-weight: normal; letter-spacing: 0; text-transform: none; }
+  .zone-complexes {
+    display: none; padding: 4px 0 4px 10px;
+    border-left: 2px solid var(--border); margin-left: 6px; margin-bottom: 4px;
+  }
+  .zone-group.open .zone-complexes { display: block; }
   .range-row { display: flex; gap: 6px; align-items: center; }
   .range-row input[type="number"] {
     width: 70px; padding: 4px 8px;
@@ -514,17 +530,31 @@ function initFilters(data) {
   const zones = ZONE_ORDER.filter(z => zoneMap[z])
     .concat(Object.keys(zoneMap).filter(z => !ZONE_ORDER.includes(z)));
 
-  cont.innerHTML = zones.map(zone => `
+  cont.innerHTML = zones.map(zone => {
+    const complexes = zoneMap[zone] || [];
+    return `
     <div class="zone-group" data-zone="${zone}">
-      <label class="zone-label">
+      <div class="zone-header">
         <input type="checkbox" class="zone-check" data-zone="${zone}" checked>
-        ${zone}
-      </label>
-      <div class="zone-complexes">
-        ${(zoneMap[zone] || []).map(n => `<label><input type="checkbox" value="${n}" checked> ${n}</label>`).join('')}
+        <span class="zone-name" data-zone="${zone}">
+          <span class="zone-arrow">&#9654;</span>
+          ${zone}
+          <span class="zone-count">(${complexes.length}단지)</span>
+        </span>
       </div>
-    </div>
-  `).join('');
+      <div class="zone-complexes">
+        ${complexes.map(n => `<label><input type="checkbox" value="${n}" checked> ${n}</label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  // 구역명 클릭 → 아코디언 펼치기/닫기
+  cont.addEventListener('click', e => {
+    const nameEl = e.target.closest('.zone-name');
+    if (nameEl) {
+      nameEl.closest('.zone-group').classList.toggle('open');
+    }
+  });
 
   cont.addEventListener('change', e => {
     if (e.target.classList.contains('zone-check')) {
