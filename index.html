@@ -56,6 +56,16 @@
   }
   .filter-group label:hover { background: var(--card-2); }
   .filter-group input[type="checkbox"] { margin: 0; }
+  .zone-group { margin-bottom: 10px; }
+  .zone-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 3px 6px; margin-bottom: 2px; cursor: pointer;
+    border-radius: 4px;
+  }
+  .zone-label:hover { background: rgba(88,166,255,.08); }
+  .zone-complexes { padding-left: 10px; }
   .range-row { display: flex; gap: 6px; align-items: center; }
   .range-row input[type="number"] {
     width: 70px; padding: 4px 8px;
@@ -384,8 +394,24 @@ function median(arr) {
 }
 
 function toggleAllComplex(checked) {
-  document.querySelectorAll('#filter-complex input[type=checkbox]').forEach(cb => cb.checked = checked);
+  document.querySelectorAll('#filter-complex .zone-complexes input').forEach(cb => cb.checked = checked);
+  document.querySelectorAll('#filter-complex .zone-check').forEach(cb => { cb.checked = checked; cb.indeterminate = false; });
   applyFilters();
+}
+
+function _updateZoneAndMasterState() {
+  const cont = document.getElementById('filter-complex');
+  cont.querySelectorAll('.zone-check').forEach(zc => {
+    const zone = zc.dataset.zone;
+    const boxes = cont.querySelectorAll(`.zone-group[data-zone="${zone}"] .zone-complexes input`);
+    const n = Array.from(boxes).filter(b => b.checked).length;
+    zc.indeterminate = n > 0 && n < boxes.length;
+    zc.checked = n === boxes.length;
+  });
+  const all = cont.querySelectorAll('.zone-complexes input');
+  const n = Array.from(all).filter(b => b.checked).length;
+  const master = document.getElementById('check-all-complex');
+  if (master) { master.indeterminate = n > 0 && n < all.length; master.checked = n === all.length; }
 }
 
 // ===== 데이터 신선도 =====
@@ -471,16 +497,41 @@ function confirmAgeClass(dateStr) {
 // ===== 필터 UI 초기화 =====
 function initFilters(data) {
   const cont = document.getElementById('filter-complex');
-  const names = Array.from(new Set(data.매물.map(a => a.단지))).sort();
-  cont.innerHTML = names.map(n => `
-    <label><input type="checkbox" value="${n}" checked> ${n}</label>
+  const ZONE_ORDER = ["송도 1공구", "송도 3공구", "안양"];
+
+  // 단지 → 구역 맵핑 (단지요약에서 추출, 없으면 매물에서)
+  const zoneOf = {};
+  (data.단지요약 || []).forEach(s => { if (s.구역) zoneOf[s.단지] = s.구역; });
+  data.매물.forEach(a => { if (a.구역 && !zoneOf[a.단지]) zoneOf[a.단지] = a.구역; });
+
+  // 구역별 단지 목록
+  const zoneMap = {};
+  Array.from(new Set(data.매물.map(a => a.단지))).sort().forEach(name => {
+    const z = zoneOf[name] || "기타";
+    (zoneMap[z] = zoneMap[z] || []).push(name);
+  });
+
+  const zones = ZONE_ORDER.filter(z => zoneMap[z])
+    .concat(Object.keys(zoneMap).filter(z => !ZONE_ORDER.includes(z)));
+
+  cont.innerHTML = zones.map(zone => `
+    <div class="zone-group" data-zone="${zone}">
+      <label class="zone-label">
+        <input type="checkbox" class="zone-check" data-zone="${zone}" checked>
+        ${zone}
+      </label>
+      <div class="zone-complexes">
+        ${(zoneMap[zone] || []).map(n => `<label><input type="checkbox" value="${n}" checked> ${n}</label>`).join('')}
+      </div>
+    </div>
   `).join('');
-  cont.addEventListener('change', () => {
-    const all = cont.querySelectorAll('input[type=checkbox]');
-    const checked = cont.querySelectorAll('input[type=checkbox]:checked');
-    const master = document.getElementById('check-all-complex');
-    master.indeterminate = checked.length > 0 && checked.length < all.length;
-    master.checked = checked.length === all.length;
+
+  cont.addEventListener('change', e => {
+    if (e.target.classList.contains('zone-check')) {
+      const zone = e.target.dataset.zone;
+      cont.querySelectorAll(`.zone-group[data-zone="${zone}"] .zone-complexes input`).forEach(cb => cb.checked = e.target.checked);
+    }
+    _updateZoneAndMasterState();
     applyFilters();
   });
   document.getElementById('filter-trade').addEventListener('change', applyFilters);
@@ -493,8 +544,10 @@ function initFilters(data) {
 }
 
 function getCheckedValues(containerId) {
-  return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`))
-              .map(el => el.value);
+  const sel = containerId === 'filter-complex'
+    ? `#${containerId} .zone-complexes input[type=checkbox]:checked`
+    : `#${containerId} input[type=checkbox]:checked`;
+  return Array.from(document.querySelectorAll(sel)).map(el => el.value);
 }
 
 function applyFilters() {
