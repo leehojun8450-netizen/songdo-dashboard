@@ -235,16 +235,16 @@
     </div>
     <div class="step">
       <div class="step-num">3</div>
-      <div>수집 완료 후 (약 30~40초) 이 창을 닫고 <b>🔄 화면 갱신</b> 클릭</div>
+      <div>수집 완료 후 (약 2~3분, GitHub Pages 반영 포함) 이 창을 닫고 <b>🔄 화면 갱신</b> 클릭</div>
     </div>
     <div style="margin-top:16px; padding:10px 14px; background:rgba(88,166,255,.08); border:1px solid rgba(88,166,255,.2); border-radius:6px; font-size:13px; color:var(--muted);">
-      💡 <b>자동 갱신</b>: 아래 버튼으로 40초 타이머를 시작하면 bat 실행 후 자동으로 화면이 갱신됩니다.
+      💡 <b>자동 갱신</b>: 아래 버튼으로 3분 타이머를 시작하면 수집 완료 + GitHub 반영 후 자동으로 화면이 갱신됩니다.
     </div>
     <div class="modal-actions">
       <button class="btn-close" onclick="closeFetchModal()">닫기</button>
       <button class="btn-copy" onclick="copyBatPath()">📋 경로 복사</button>
       <button class="btn-copy" style="background:var(--warn); margin-left:0;"
-              onclick="scheduleAutoReload();closeFetchModal()">⏱ 40초 후 자동 갱신</button>
+              onclick="scheduleAutoReload();closeFetchModal()">⏱ 3분 후 자동 갱신</button>
     </div>
   </div>
 </div>
@@ -443,12 +443,12 @@ function copyBatPath() {
 function onFetchClick() {
   const prog = document.getElementById('refresh-progress');
   prog.style.display = 'inline';
-  prog.textContent = '⬇ 다운로드 바 [열기] 클릭 → 40초 후 자동 갱신';
+  prog.textContent = '⬇ 다운로드 바 [열기] 클릭 → 3분 후 자동 갱신';
   scheduleAutoReload();
 }
 
 function scheduleAutoReload() {
-  let sec = 40;
+  let sec = 180;
   const prog = document.getElementById('refresh-progress');
   const timer = setInterval(() => {
     sec--;
@@ -456,7 +456,7 @@ function scheduleAutoReload() {
     if (sec <= 0) { clearInterval(timer); location.reload(); }
   }, 1000);
   const badge = document.getElementById('data-age-badge');
-  if (badge) { badge.textContent = '수집 중… (40초 후 갱신)'; badge.style.color = 'var(--warn)'; }
+  if (badge) { badge.textContent = '수집 중… (3분 후 갱신)'; badge.style.color = 'var(--warn)'; }
 }
 
 function confirmAgeClass(dateStr) {
