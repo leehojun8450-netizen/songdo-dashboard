@@ -30,6 +30,13 @@ jobs:
 
       - name: Commit and push updated data
         run: |
+          # 해외 IP(네이버 차단) 등으로 0건이면 기존 데이터를 덮어쓰지 않고 건너뜀
+          COUNT=$(python -c "import re; s=open('data.js',encoding='utf-8').read(); m=re.search(r'\"총매물\":\s*(\d+)', s); print(m.group(1) if m else 0)")
+          echo "수집 매물 수: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::warning::매물 0건 — 해외 IP 차단 추정. 커밋 건너뜀(기존 데이터 보존)."
+            exit 0
+          fi
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git add data.js data.json 단지목록.json
