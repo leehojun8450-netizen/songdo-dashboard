@@ -485,20 +485,40 @@ function copyBatPath() {
 function onFetchClick() {
   const prog = document.getElementById('refresh-progress');
   prog.style.display = 'inline';
-  prog.textContent = '⬇ 다운로드 바 [열기] 클릭 → 3분 후 자동 갱신';
+  prog.textContent = '⬇ 크롬 팝업에서 [열기]를 눌러 수집 시작 · 준비되면 자동 갱신';
   scheduleAutoReload();
 }
 
+// 고정 대기 대신, 실제로 새 데이터가 도착하면 그때 자동 갱신한다.
+// http(s): data.json 갱신시각을 폴링해 값이 바뀌면 즉시 새로고침.
+// file://: 폴링 불가 → 로컬 수집 소요시간만큼(약 3분) 기다린 뒤 새로고침.
 function scheduleAutoReload() {
-  let sec = 180;
-  const prog = document.getElementById('refresh-progress');
-  const timer = setInterval(() => {
-    sec--;
-    if (prog) prog.textContent = `⏱ ${sec}초 후 자동 갱신…`;
-    if (sec <= 0) { clearInterval(timer); location.reload(); }
-  }, 1000);
+  const prog  = document.getElementById('refresh-progress');
   const badge = document.getElementById('data-age-badge');
-  if (badge) { badge.textContent = '수집 중… (3분 후 갱신)'; badge.style.color = 'var(--warn)'; }
+  const before = (RAW && RAW.갱신시각) || '';
+  const isFile = location.protocol === 'file:';
+  const MAX = isFile ? 180 : 420;   // file:// 3분 / Pages 7분(재빌드 여유)
+  let waited = 0;
+  if (badge) { badge.textContent = '수집 중…'; badge.style.color = 'var(--warn)'; }
+  const timer = setInterval(async () => {
+    waited += 10;
+    if (!isFile) {
+      try {
+        const r = await fetch('data.json?t=' + new Date().getTime());
+        if (r.ok) {
+          const d = await r.json();
+          if (d && d.갱신시각 && d.갱신시각 !== before) {
+            clearInterval(timer);
+            if (prog) prog.textContent = '✅ 최신 데이터 도착 — 갱신합니다';
+            setTimeout(() => location.reload(), 800);
+            return;
+          }
+        }
+      } catch (_) { /* 아직 배포 전 — 계속 대기 */ }
+    }
+    if (prog) prog.textContent = `⏳ 수집·배포 대기 중… ${waited}s (준비되면 자동 갱신 · 최대 ${MAX}s)`;
+    if (waited >= MAX) { clearInterval(timer); location.reload(); }
+  }, 10000);
 }
 
 function confirmAgeClass(dateStr) {
