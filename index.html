@@ -529,6 +529,21 @@ async function serverCollect() {
   }, 3000);
 }
 
+// F5(로드) 시 자동 수집: 로컬 서버 모드 + 데이터가 STALE_MIN 이상 오래됐을 때만.
+// 무한 반복 방지 — 최근 자동수집 시도로부터 10분 안이면 건너뜀.
+const AUTO_STALE_MIN = 30;   // 이 분(分) 이상 오래되면 F5 시 자동 수집 (원하는 값으로 조절)
+function maybeAutoCollect(ts) {
+  if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;  // 서버 모드에서만
+  const ageMin = ts ? (new Date() - new Date(ts.replace(' ', 'T'))) / 60000 : 1e9;
+  if (ageMin < AUTO_STALE_MIN) return;                               // 아직 신선 → 그대로
+  const last = +(sessionStorage.getItem('autoCollectAt') || 0);
+  if (new Date().getTime() - last < 10 * 60000) return;              // 최근 시도 → 루프 방지
+  sessionStorage.setItem('autoCollectAt', new Date().getTime());
+  const prog = document.getElementById('refresh-progress');
+  if (prog) { prog.style.display = 'inline'; prog.textContent = '🔄 데이터가 오래되어 자동 수집을 시작합니다…'; }
+  serverCollect();
+}
+
 // 고정 대기 대신, 실제로 새 데이터가 도착하면 그때 자동 갱신한다.
 // http(s): data.json 갱신시각을 폴링해 값이 바뀌면 즉시 새로고침.
 // file://: 폴링 불가 → 로컬 수집 소요시간만큼(약 3분) 기다린 뒤 새로고침.
@@ -1012,6 +1027,7 @@ loadData().then(data => {
   }
   initFilters(data);
   applyFilters();
+  maybeAutoCollect(data.갱신시각);   // 로컬 서버 모드 + 데이터 오래되면 F5 시 자동 수집
 }).catch(err => {
   document.getElementById('warning').innerHTML =
     `<div class="warn">❌ 데이터 로드 실패: ${err.message}<br/>
